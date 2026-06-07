@@ -10,8 +10,7 @@ function canUseServerFileStore() {
 
 function serverStorePath() {
     if (!canUseServerFileStore()) return null;
-    const path = process.getBuiltinModule('path');
-    return process.env.GENAI_ASSET_STORE_PATH || path.join(process.cwd(), '.genai', 'assets.json');
+    return process.env.GENAI_ASSET_STORE_PATH || '/tmp/.genai/assets.json';
 }
 
 function safeJsonParse(value) {

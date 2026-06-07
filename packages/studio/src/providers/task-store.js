@@ -10,8 +10,7 @@ function canUseServerFileStore() {
 
 function serverStorePath() {
     if (!canUseServerFileStore()) return null;
-    const path = process.getBuiltinModule('path');
-    return process.env.GENAI_TASK_STORE_PATH || path.join(process.cwd(), '.genai', 'tasks.json');
+    return process.env.GENAI_TASK_STORE_PATH || '/tmp/.genai/tasks.json';
 }
 
 function safeJsonParse(value) {

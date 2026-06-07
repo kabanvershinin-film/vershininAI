@@ -14,7 +14,7 @@ async function importNodePath() {
 function defaultConfigPath() {
     const explicit = process.env.GENAI_PROVIDER_CONFIG_PATH;
     if (explicit) return explicit;
-    return `${process.cwd()}${process.platform === 'win32' ? '\\' : '/'}${'.genai'}${process.platform === 'win32' ? '\\' : '/'}provider-config.json`;
+    return '/tmp/.genai/provider-config.json';
 }
 
 function parseEnvConfig() {
