@@ -1,0 +1,7 @@
+﻿Open-Generative-AI clean source package
+CreatedAt=2026-06-07T20:50:02
+Source=G:\2026\俄罗斯网页\Open-Generative-AI
+CopiedFiles=187
+CopiedBytes=19602459
+Excluded=node_modules,.next,.genai,.codex-backups,.codex-runlogs,.serena,.git,release,out,dist,.webpack,logs,.env*,*.local,secret/key/cert files
+Note=API keys are not bundled. Configure provider keys with environment variables or UI settings after unpacking.
