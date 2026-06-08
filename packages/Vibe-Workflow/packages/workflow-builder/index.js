@@ -2,6 +2,8 @@
 
 import React from "react";
 
+export const WORKFLOW_BUILDER_STUB = true;
+
 export function WorkflowBuilder() {
   return React.createElement(
     "div",

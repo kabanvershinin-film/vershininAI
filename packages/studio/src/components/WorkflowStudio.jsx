@@ -15,6 +15,10 @@ import {
   getWorkflowData,
 } from "../muapi.js";
 import dynamic from "next/dynamic";
+import * as WorkflowBuilderPackage from "workflow-builder";
+
+const workflowBuilderAvailable =
+  WorkflowBuilderPackage.WORKFLOW_BUILDER_STUB !== true;
 
 const WorkflowUI = dynamic(() => import("./WorkflowUI"), {
   ssr: false,
@@ -173,7 +177,10 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
       setResult(null);
       setError(null);
       
-      const targetTab = urlTab || "playground";
+      const targetTab =
+        urlTab === "builder" && !workflowBuilderAvailable
+          ? "playground"
+          : (urlTab || "playground");
       setActiveSubTab(targetTab);
 
       if (!fromUrl) {
@@ -258,8 +265,9 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
             data: { nodes: [] },
           };
           const response = await createWorkflow(apiKey, payload);
+          const targetTab = workflowBuilderAvailable ? "builder" : "playground";
           // Route to /workflow/[id] so useParams().id works in the builder library
-          router.push(`/workflow/${response.workflow_id}/builder`);
+          router.push(`/workflow/${response.workflow_id}/${targetTab}`);
           return;
         }
 
@@ -267,7 +275,7 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
         setSelectedWorkflow({ id: null, name: "Untitled Workflow" });
         setNodeSchemas([]);
         setWorkflowDef({ nodes: [], edges: [] });
-        setActiveSubTab("builder");
+        setActiveSubTab(workflowBuilderAvailable ? "builder" : "playground");
       } catch (err) {
         setError("Failed to initialize workflow: " + err.message);
       } finally {
@@ -317,11 +325,26 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
     if (typeof window !== 'undefined' && urlWorkflowId && urlWorkflowId !== 'new') {
       const path = window.location.pathname;
       if (path.startsWith('/studio/workflows/')) {
-        const tab = urlTab || 'builder';
+        const tab =
+          (!urlTab && !workflowBuilderAvailable) ||
+          (urlTab === "builder" && !workflowBuilderAvailable)
+            ? "playground"
+            : (urlTab || "builder");
         router.replace(`/workflow/${urlWorkflowId}/${tab}`);
       }
     }
   }, [urlWorkflowId, urlTab, router]);
+
+  useEffect(() => {
+    if (
+      !workflowBuilderAvailable &&
+      urlWorkflowId &&
+      activeSubTab === "builder"
+    ) {
+      setActiveSubTab("playground");
+      router.replace(`/workflow/${urlWorkflowId}/playground`);
+    }
+  }, [activeSubTab, router, urlWorkflowId]);
 
   // 1. Sync state with URL on mount or URL change
   useEffect(() => {
@@ -472,11 +495,17 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
                         if (selectedWorkflow?.id) router.push(`/workflow/${selectedWorkflow.id}/builder`);
                     }}
                     type="button"
+                    disabled={!workflowBuilderAvailable}
+                    title={
+                      workflowBuilderAvailable
+                        ? "Open full workflow builder"
+                        : "Workflow builder is unavailable in this checkout"
+                    }
                     className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${
                       activeSubTab === "builder"
                         ? "bg-[#22d3ee] text-black shadow-[0_0_15px_rgba(34, 211, 238,0.2)]"
                         : "text-white/40 hover:text-white"
-                    }`}
+                    } ${!workflowBuilderAvailable ? "cursor-not-allowed opacity-40 hover:text-white/40" : ""}`}
                   >
                     Full Workflow
                   </button>
@@ -516,7 +545,12 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
             
             <div className="flex bg-white/5 p-1 rounded-lg">
                <button
-                 onClick={() => setActiveSubTab("playground")}
+                 onClick={() => {
+                   setActiveSubTab("playground");
+                   if (selectedWorkflow?.id) {
+                     router.push(`/workflow/${selectedWorkflow.id}/playground`);
+                   }
+                 }}
                  type="button"
                  className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-md transition-all ${
                    activeSubTab === "playground" ? "bg-[#22d3ee] text-black" : "text-white/40"
@@ -525,11 +559,18 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
                  Play
                </button>
                <button
-                 onClick={() => setActiveSubTab("builder")}
+                 onClick={() => {
+                   if (!workflowBuilderAvailable) return;
+                   setActiveSubTab("builder");
+                   if (selectedWorkflow?.id) {
+                     router.push(`/workflow/${selectedWorkflow.id}/builder`);
+                   }
+                 }}
                  type="button"
+                 disabled={!workflowBuilderAvailable}
                  className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-md transition-all ${
                    activeSubTab === "builder" ? "bg-[#22d3ee] text-black" : "text-white/40"
-                 }`}
+                 } ${!workflowBuilderAvailable ? "cursor-not-allowed opacity-40" : ""}`}
                >
                  Builder
                </button>
@@ -549,6 +590,12 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
         )}
 
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+          {!workflowBuilderAvailable && (
+            <div className="mx-6 mt-6 rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
+              Full Workflow editor is unavailable in this checkout because the
+              `workflow-builder` package is a local stub. Use Playground for now.
+            </div>
+          )}
           {activeSubTab === "playground" ? (
             <>
               {/* Controls Panel */}
