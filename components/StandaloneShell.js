@@ -3,14 +3,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ImageStudio, VideoStudio, ClippingStudio, VibeMotionStudio, LipSyncStudio, CinemaStudio, AudioStudio, MarketingStudio, WorkflowStudio, AgentStudio, AppsStudio, getUserBalance } from 'studio';
+import { ImageStudio, VideoStudio, ClippingStudio, VibeMotionStudio, LipSyncStudio, CinemaStudio, AudioStudio, MarketingStudio, WorkflowStudio, AgentStudio, AppsStudio } from 'studio';
 
 const DesignAgentStudio = dynamic(() => import('studio').then(mod => mod.DesignAgentStudio), {
   ssr: false,
   loading: () => <div className="h-full w-full bg-black flex items-center justify-center text-white/20">Loading Design Studio...</div>
 });
 import axios from 'axios';
-import ApiKeyModal from './ApiKeyModal';
 import {
   getProviderApiKey,
   getProviderConfigSnapshot,
@@ -85,7 +84,6 @@ export default function StandaloneShell() {
   const [volcengineKeyInput, setVolcengineKeyInput] = useState('');
   const [activeTab, setActiveTab] = useState(getInitialTab());
 
-  const [balance, setBalance] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
@@ -142,15 +140,6 @@ export default function StandaloneShell() {
     }
   }, [activeTab]);
 
-  const fetchBalance = useCallback(async (key) => {
-    try {
-      const data = await getUserBalance(key);
-      setBalance(data.balance);
-    } catch (err) {
-      console.error('Balance fetch failed:', err);
-    }
-  }, []);
-
   const refreshProviderState = useCallback((config = loadProviderConfig()) => {
     const snapshot = getProviderConfigSnapshot(config);
     const selectedProviderId = snapshot.selectedProviderId || 'memefast';
@@ -170,19 +159,15 @@ export default function StandaloneShell() {
       // Sync cookie immediately on mount to establish identity for background requests
       document.cookie = `muapi_key=${stored}; path=/; max-age=31536000; SameSite=Lax`;
     }
-    if (selectedProviderId === 'muapi' && activeKey) {
-      fetchBalance(activeKey);
-    }
-  }, [fetchBalance, refreshProviderState]);
+  }, [refreshProviderState]);
 
   const handleKeySave = useCallback((key) => {
     const normalizedKey = normalizeMuapiKey(key);
     localStorage.setItem(STORAGE_KEY, normalizedKey);
     setProviderApiKey('muapi', normalizedKey);
     setApiKey(normalizedKey);
-    fetchBalance(normalizedKey);
     document.cookie = `muapi_key=${normalizedKey}; path=/; max-age=31536000; SameSite=Lax`;
-  }, [fetchBalance]);
+  }, []);
 
   const handleKeyChange = useCallback(() => {
     const targetProviderId = MUAPI_ONLY_TABS.has(activeTab)
@@ -192,7 +177,6 @@ export default function StandaloneShell() {
     if (targetProviderId === 'muapi') {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem('genai_key_muapi');
-      setBalance(null);
       document.cookie = "muapi_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     }
     if (targetProviderId === 'memefast') {
@@ -209,13 +193,8 @@ export default function StandaloneShell() {
 
   const handleProviderChange = useCallback((providerId) => {
     const nextConfig = setSelectedProvider(providerId);
-    const { activeKey } = refreshProviderState(nextConfig);
-    if (providerId === 'muapi' && activeKey) {
-      fetchBalance(activeKey);
-    } else {
-      setBalance(null);
-    }
-  }, [fetchBalance, refreshProviderState]);
+    refreshProviderState(nextConfig);
+  }, [refreshProviderState]);
 
   const handleMemefastKeySave = useCallback(() => {
     setProviderApiKey('memefast', memefastKeyInput.trim());
@@ -226,24 +205,6 @@ export default function StandaloneShell() {
     setProviderApiKey('volcengine', volcengineKeyInput.trim());
     refreshProviderState();
   }, [volcengineKeyInput, refreshProviderState]);
-
-  const handleRequiredKeySave = useCallback((key) => {
-    const targetProviderId = MUAPI_ONLY_TABS.has(activeTab)
-      ? 'muapi'
-      : (providerConfig?.selectedProviderId || 'memefast');
-    if (targetProviderId === 'muapi') {
-      handleKeySave(key);
-      return;
-    }
-    setProviderApiKey(targetProviderId, key);
-    if (targetProviderId === 'memefast') {
-      setMemefastKeyInput(key);
-    }
-    if (targetProviderId === 'volcengine') {
-      setVolcengineKeyInput(key);
-    }
-    refreshProviderState();
-  }, [activeTab, handleKeySave, providerConfig?.selectedProviderId, refreshProviderState]);
 
   // Inject API key into all outgoing Axios requests (prop-based approach)
   // We use an interceptor to be selective and NOT send the key to external domains like S3
@@ -269,13 +230,6 @@ export default function StandaloneShell() {
       axios.interceptors.request.eject(interceptorId);
     };
   }, [apiKey, providerConfig?.selectedProviderId]);
-
-  // Poll for balance every 30 seconds if key is present
-  useEffect(() => {
-    if (!apiKey || providerConfig?.selectedProviderId !== 'muapi') return;
-    const interval = setInterval(() => fetchBalance(apiKey), 30000);
-    return () => clearInterval(interval);
-  }, [apiKey, fetchBalance, providerConfig?.selectedProviderId]);
 
   // Drag and Drop Handlers
   const handleDragOver = useCallback((e) => {
@@ -324,23 +278,8 @@ export default function StandaloneShell() {
   const providerOptions = (providerConfig?.providers || []).filter((provider) => provider.enabled !== false);
   const volcengineProvider = providerOptions.find((provider) => provider.id === 'volcengine');
   const muapiKey = getProviderApiKey('muapi');
-  const activeTabRequiresMuapi = MUAPI_ONLY_TABS.has(activeTab);
-  const requiredProviderId = activeTabRequiresMuapi ? 'muapi' : selectedProviderId;
-  const requiredProvider = providerConfig?.providers?.find((provider) => provider.id === requiredProviderId);
-  const requiredKeyMissing = activeTabRequiresMuapi ? !muapiKey : !apiKey;
   const studioPaneClass = (tabId) =>
     `absolute inset-0 ${activeTab === tabId ? 'block' : 'hidden pointer-events-none'}`;
-
-  if (requiredKeyMissing) {
-    return (
-      <ApiKeyModal
-        onSave={handleRequiredKeySave}
-        providerId={requiredProviderId}
-        providerName={requiredProvider?.name}
-        providerUrl={requiredProviderId === 'muapi' ? 'https://muapi.ai/access-keys' : requiredProvider?.baseUrl}
-      />
-    );
-  }
 
   return (
     <div 
@@ -414,7 +353,9 @@ export default function StandaloneShell() {
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-white/90">
-                  {selectedProviderId === 'muapi' && balance !== null ? `$${balance}` : '---'}
+                  {selectedProviderId === 'muapi'
+                    ? (muapiKey ? 'BYOK' : 'No key')
+                    : '---'}
                 </span>
               </div>
             </div>
