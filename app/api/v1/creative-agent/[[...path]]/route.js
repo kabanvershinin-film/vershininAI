@@ -2,6 +2,14 @@ import { NextResponse } from 'next/server';
 
 const MUAPI_BASE = 'https://api.muapi.ai';
 
+function getServerApiKey() {
+    return process.env.MUAPI_API_KEY
+        || process.env.GENAI_MUAPI_API_KEY
+        || process.env.MUAPI_KEY
+        || process.env.MUAPIAPP_API_KEY
+        || '';
+}
+
 function getApiKey(request) {
     const authHeader = request.headers.get('Authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -10,7 +18,8 @@ function getApiKey(request) {
     const headerKey = request.headers.get('x-api-key');
     if (headerKey) return headerKey;
     const cookieKey = request.cookies.get('muapi_key')?.value;
-    return cookieKey;
+    if (cookieKey) return cookieKey;
+    return getServerApiKey();
 }
 
 function cleanHeaders(request) {
