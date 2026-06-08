@@ -168,6 +168,7 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const isTemplatePreview = Boolean(selectedWorkflow?.isTemplatePreview);
   
 
   // Handlers defined early so they can be used in effects
@@ -179,33 +180,18 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
           : (urlTab || "playground");
 
       if (!fromUrl && activeMainTab === "templates") {
-        try {
-          setLoading(true);
-          setError(null);
-          setResult(null);
-
-          const cloned = await createWorkflow(apiKey, {
-            source_workflow_id: wf.id,
-            name: wf.name || "Untitled Workflow",
-          });
-
-          const clonedWorkflow = {
-            ...wf,
-            id: cloned.workflow_id || cloned.id,
-            sourceWorkflowId: wf.id,
-          };
-
-          setSelectedWorkflow(clonedWorkflow);
-          setActiveMainTab("my-workflows");
-          setActiveSubTab(targetTab);
-          router.push(`/workflow/${clonedWorkflow.id}/${targetTab}`);
-          return;
-        } catch (err) {
-          console.error("Template clone failed:", err);
-          setError("Failed to copy template into your workspace: " + err.message);
-          setLoading(false);
-          return;
-        }
+        setError(null);
+        setResult(null);
+        setInputSchema(null);
+        setNodeSchemas(null);
+        setWorkflowDef(null);
+        setFormData({});
+        setSelectedWorkflow({
+          ...wf,
+          isTemplatePreview: true,
+        });
+        setActiveSubTab("playground");
+        return;
       }
 
       setSelectedWorkflow(wf);
@@ -223,6 +209,10 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
 
   // Dedicated data fetching effect for the active workflow
   useEffect(() => {
+    if (isTemplatePreview) {
+      setLoading(false);
+      return;
+    }
     if (!selectedWorkflow?.id || !apiKey) return;
 
     async function loadWorkflowDetails() {
@@ -281,7 +271,7 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
     }
 
     loadWorkflowDetails();
-  }, [selectedWorkflow?.id, apiKey]);
+  }, [selectedWorkflow?.id, apiKey, isTemplatePreview]);
 
   const handleCreateWorkflow = useCallback(
     async (fromUrl = false) => {
@@ -521,13 +511,16 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
                   </button>
                   <button
                     onClick={() => {
+                        if (isTemplatePreview) return;
                         setActiveSubTab("builder");
                         if (selectedWorkflow?.id) router.push(`/workflow/${selectedWorkflow.id}/builder`);
                     }}
                     type="button"
-                    disabled={!workflowBuilderAvailable}
+                    disabled={!workflowBuilderAvailable || isTemplatePreview}
                     title={
-                      workflowBuilderAvailable
+                      isTemplatePreview
+                        ? "Builder is disabled in template preview mode"
+                        : workflowBuilderAvailable
                         ? "Open full workflow builder"
                         : "Workflow builder is unavailable in this checkout"
                     }
@@ -535,7 +528,7 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
                       activeSubTab === "builder"
                         ? "bg-[#22d3ee] text-black shadow-[0_0_15px_rgba(34, 211, 238,0.2)]"
                         : "text-white/40 hover:text-white"
-                    } ${!workflowBuilderAvailable ? "cursor-not-allowed opacity-40 hover:text-white/40" : ""}`}
+                    } ${(!workflowBuilderAvailable || isTemplatePreview) ? "cursor-not-allowed opacity-40 hover:text-white/40" : ""}`}
                   >
                     Full Workflow
                   </button>
@@ -590,17 +583,17 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
                </button>
                <button
                  onClick={() => {
-                   if (!workflowBuilderAvailable) return;
+                   if (!workflowBuilderAvailable || isTemplatePreview) return;
                    setActiveSubTab("builder");
                    if (selectedWorkflow?.id) {
                      router.push(`/workflow/${selectedWorkflow.id}/builder`);
                    }
                  }}
                  type="button"
-                 disabled={!workflowBuilderAvailable}
+                 disabled={!workflowBuilderAvailable || isTemplatePreview}
                  className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-md transition-all ${
                    activeSubTab === "builder" ? "bg-[#22d3ee] text-black" : "text-white/40"
-                 } ${!workflowBuilderAvailable ? "cursor-not-allowed opacity-40" : ""}`}
+                 } ${(!workflowBuilderAvailable || isTemplatePreview) ? "cursor-not-allowed opacity-40" : ""}`}
                >
                  Builder
                </button>
@@ -620,6 +613,11 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
         )}
 
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+          {isTemplatePreview && (
+            <div className="mx-6 mt-6 rounded-xl border border-[#22d3ee]/20 bg-[#22d3ee]/10 px-4 py-3 text-xs text-[#b8f6ff]">
+              Template preview mode is enabled. Protected MuAPI requests are skipped so you can open the template without authentication.
+            </div>
+          )}
           {!workflowBuilderAvailable && (
             <div className="mx-6 mt-6 rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
               Full Workflow editor is unavailable in this checkout because the
@@ -631,6 +629,26 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
               {/* Controls Panel */}
               <div className="w-full lg:w-[400px] border-r border-white/5 flex flex-col bg-black/20">
                 <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+                  {isTemplatePreview ? (
+                    <div className="space-y-5">
+                      <div>
+                        <h3 className="text-xs font-black text-white/30 uppercase tracking-widest mb-4">
+                          Template Preview
+                        </h3>
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#22d3ee]">
+                            {selectedWorkflow?.category || "General"}
+                          </div>
+                          <h2 className="mt-3 text-lg font-bold text-white">
+                            {selectedWorkflow?.name || "Untitled Flow"}
+                          </h2>
+                          <p className="mt-3 text-sm leading-6 text-white/60">
+                            This template opens in a local preview mode. Running, cloning, and builder loading are disabled in this bypass.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
                   <form onSubmit={handleRun} className="space-y-6">
                     <div>
                       <h3 className="text-xs font-black text-white/30 uppercase tracking-widest mb-4">
@@ -733,11 +751,29 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
                       </p>
                     )}
                   </form>
+                  )}
                 </div>
               </div>
 
               {/* Preview Panel */}
               <div className="flex-1 overflow-y-auto p-8 lg:p-12 bg-[#050505] flex items-center justify-center min-h-[500px]">
+                {isTemplatePreview && !error && (
+                  <div className="w-full max-w-3xl">
+                    <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl">
+                      {selectedWorkflow?.thumbnail ? (
+                        <img
+                          src={selectedWorkflow.thumbnail}
+                          className="w-full max-h-[640px] object-cover"
+                          alt={selectedWorkflow?.name || "Template preview"}
+                        />
+                      ) : (
+                        <div className="flex min-h-[420px] items-center justify-center text-white/25">
+                          Preview unavailable
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {error && (
                   <div className="w-full max-w-md p-6 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col items-center gap-4 animate-shake">
                     <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center text-red-500">
@@ -765,7 +801,7 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
                   </div>
                 )}
 
-                {!isExecuting && !result && !error && (
+                {!isTemplatePreview && !isExecuting && !result && !error && (
                   <div className="flex flex-col items-center gap-6 opacity-40">
                     <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center text-white/20">
                       <svg
