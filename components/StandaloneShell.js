@@ -39,6 +39,13 @@ const MEMEFAST_KEY_STORAGE_KEY = 'genai_key_memefast';
 const VOLCENGINE_KEY_STORAGE_KEY = 'genai_key_volcengine';
 const MUAPI_ONLY_TABS = new Set(['workflows', 'agents', 'design-agent', 'apps']);
 
+function normalizeMuapiKey(key) {
+  return String(key || '')
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .find(Boolean) || '';
+}
+
 export default function StandaloneShell() {
   const params = useParams();
   const router = useRouter();
@@ -158,7 +165,7 @@ export default function StandaloneShell() {
     setMemefastKeyInput(localStorage.getItem(MEMEFAST_KEY_STORAGE_KEY) || '');
     setVolcengineKeyInput(localStorage.getItem(VOLCENGINE_KEY_STORAGE_KEY) || '');
     const { selectedProviderId, activeKey } = refreshProviderState();
-    const stored = getProviderApiKey('muapi');
+    const stored = normalizeMuapiKey(getProviderApiKey('muapi'));
     if (stored) {
       // Sync cookie immediately on mount to establish identity for background requests
       document.cookie = `muapi_key=${stored}; path=/; max-age=31536000; SameSite=Lax`;
@@ -169,11 +176,12 @@ export default function StandaloneShell() {
   }, [fetchBalance, refreshProviderState]);
 
   const handleKeySave = useCallback((key) => {
-    localStorage.setItem(STORAGE_KEY, key);
-    setProviderApiKey('muapi', key);
-    setApiKey(key);
-    fetchBalance(key);
-    document.cookie = `muapi_key=${key}; path=/; max-age=31536000; SameSite=Lax`;
+    const normalizedKey = normalizeMuapiKey(key);
+    localStorage.setItem(STORAGE_KEY, normalizedKey);
+    setProviderApiKey('muapi', normalizedKey);
+    setApiKey(normalizedKey);
+    fetchBalance(normalizedKey);
+    document.cookie = `muapi_key=${normalizedKey}; path=/; max-age=31536000; SameSite=Lax`;
   }, [fetchBalance]);
 
   const handleKeyChange = useCallback(() => {
