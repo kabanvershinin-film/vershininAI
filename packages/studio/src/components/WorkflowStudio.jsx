@@ -173,14 +173,44 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
   // Handlers defined early so they can be used in effects
   const handleSelectWorkflow = useCallback(
     async (wf, fromUrl = false) => {
-      setSelectedWorkflow(wf);
-      setResult(null);
-      setError(null);
-      
       const targetTab =
         urlTab === "builder" && !workflowBuilderAvailable
           ? "playground"
           : (urlTab || "playground");
+
+      if (!fromUrl && activeMainTab === "templates") {
+        try {
+          setLoading(true);
+          setError(null);
+          setResult(null);
+
+          const cloned = await createWorkflow(apiKey, {
+            source_workflow_id: wf.id,
+            name: wf.name || "Untitled Workflow",
+          });
+
+          const clonedWorkflow = {
+            ...wf,
+            id: cloned.workflow_id || cloned.id,
+            sourceWorkflowId: wf.id,
+          };
+
+          setSelectedWorkflow(clonedWorkflow);
+          setActiveMainTab("my-workflows");
+          setActiveSubTab(targetTab);
+          router.push(`/workflow/${clonedWorkflow.id}/${targetTab}`);
+          return;
+        } catch (err) {
+          console.error("Template clone failed:", err);
+          setError("Failed to copy template into your workspace: " + err.message);
+          setLoading(false);
+          return;
+        }
+      }
+
+      setSelectedWorkflow(wf);
+      setResult(null);
+      setError(null);
       setActiveSubTab(targetTab);
 
       if (!fromUrl) {
@@ -188,7 +218,7 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
         router.push(`/workflow/${wf.id}/${targetTab}`);
       }
     },
-    [router, urlTab],
+    [activeMainTab, apiKey, router, urlTab],
   );
 
   // Dedicated data fetching effect for the active workflow
@@ -948,6 +978,12 @@ export default function WorkflowStudio({ apiKey, isHeaderVisible = true, onToggl
             </button>
           </div>
         </div>
+
+        {error && (
+          <div className="mb-8 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+            {error}
+          </div>
+        )}
 
         {loading ? (
           <div className="py-20 flex items-center justify-center">
